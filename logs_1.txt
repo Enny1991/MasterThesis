@@ -1,0 +1,65 @@
+Building Network
+/Library/Python/2.7/site-packages/theano/scan_module/scan.py:1017: Warning: In the strict mode, all neccessary shared variables must be passed as a part of non_sequences
+  'must be passed as a part of non_sequences', Warning)
+Computing updates ...
+Compiling functions ...
+Traceback (most recent call last):
+  File "/Users/enea/PycharmProjects/Thesis/lasagne_first_try.py", line 183, in <module>
+    main()
+  File "/Users/enea/PycharmProjects/Thesis/lasagne_first_try.py", line 95, in main
+    [cost], updates=updates, allow_input_downcast=True)
+  File "/Library/Python/2.7/site-packages/theano/compile/function.py", line 266, in function
+    profile=profile)
+  File "/Library/Python/2.7/site-packages/theano/compile/pfunc.py", line 511, in pfunc
+    on_unused_input=on_unused_input)
+  File "/Library/Python/2.7/site-packages/theano/compile/function_module.py", line 1465, in orig_function
+    on_unused_input=on_unused_input).create(
+  File "/Library/Python/2.7/site-packages/theano/compile/function_module.py", line 1160, in __init__
+    optimizer_profile = optimizer(fgraph)
+  File "/Library/Python/2.7/site-packages/theano/gof/opt.py", line 90, in __call__
+    return self.optimize(fgraph)
+  File "/Library/Python/2.7/site-packages/theano/gof/opt.py", line 81, in optimize
+    ret = self.apply(fgraph, *args, **kwargs)
+  File "/Library/Python/2.7/site-packages/theano/gof/opt.py", line 195, in apply
+    sub_prof = optimizer.optimize(fgraph)
+  File "/Library/Python/2.7/site-packages/theano/gof/opt.py", line 81, in optimize
+    ret = self.apply(fgraph, *args, **kwargs)
+  File "/Library/Python/2.7/site-packages/theano/gof/opt.py", line 1837, in apply
+    lopt_change = self.process_node(fgraph, node, lopt)
+  File "/Library/Python/2.7/site-packages/theano/gof/opt.py", line 1493, in process_node
+    replacements = lopt.transform(node)
+  File "/Library/Python/2.7/site-packages/theano/tensor/opt.py", line 2288, in local_subtensor_merge
+    ushape[pos_2]))
+  File "/Library/Python/2.7/site-packages/theano/tensor/opt.py", line 2237, in merge_two_slices
+    start = pre_greedy_local_optimizer(list_opt, start)
+  File "/Library/Python/2.7/site-packages/theano/gof/opt.py", line 2117, in pre_greedy_local_optimizer
+    list_optimizations, out, {}, 0)
+  File "/Library/Python/2.7/site-packages/theano/gof/opt.py", line 2089, in local_recursive_function
+    depth + 1)
+  File "/Library/Python/2.7/site-packages/theano/gof/opt.py", line 2089, in local_recursive_function
+    depth + 1)
+  File "/Library/Python/2.7/site-packages/theano/gof/opt.py", line 2089, in local_recursive_function
+    depth + 1)
+  File "/Library/Python/2.7/site-packages/theano/gof/opt.py", line 2089, in local_recursive_function
+    depth + 1)
+  File "/Library/Python/2.7/site-packages/theano/gof/opt.py", line 2089, in local_recursive_function
+    depth + 1)
+  File "/Library/Python/2.7/site-packages/theano/gof/opt.py", line 2089, in local_recursive_function
+    depth + 1)
+  File "/Library/Python/2.7/site-packages/theano/gof/opt.py", line 2089, in local_recursive_function
+    depth + 1)
+  File "/Library/Python/2.7/site-packages/theano/gof/opt.py", line 2089, in local_recursive_function
+    depth + 1)
+  File "/Library/Python/2.7/site-packages/theano/gof/opt.py", line 2089, in local_recursive_function
+    depth + 1)
+  File "/Library/Python/2.7/site-packages/theano/gof/opt.py", line 2089, in local_recursive_function
+    depth + 1)
+  File "/Library/Python/2.7/site-packages/theano/gof/opt.py", line 2089, in local_recursive_function
+    depth + 1)
+  File "/Library/Python/2.7/site-packages/theano/gof/opt.py", line 2089, in local_recursive_function
+    depth + 1)
+  File "/Library/Python/2.7/site-packages/theano/gof/opt.py", line 2089, in local_recursive_function
+    depth + 1)
+  File "/Library/Python/2.7/site-packages/theano/gof/opt.py", line 2101, in local_recursive_function
+    ret = opt.transform(node)
+KeyboardInterrupt
