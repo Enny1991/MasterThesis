@@ -11,8 +11,8 @@ PARAM_EXTENSION = 'params'
 
 
 np.random.seed(42)
-data_x = loadmat('data/direction_dataset_noZERO.mat')['X_train_final_1']
-data_y = loadmat('data/direction_dataset_noZERO.mat')['Y_train_1']
+data_x = loadmat('data/direction_dataset_bit_of_noise.mat')['X_train_final']
+data_y = loadmat('data/direction_dataset_bit_of_noise.mat')['Y_train']
 n_test = 128
 
 
@@ -29,11 +29,11 @@ def main(dd):
        load_l_in, h, grad_clipping=grad_clip,
        nonlinearity=lasagne.nonlinearities.tanh)
 
-    #load_l_forward_2 = lasagne.layers.LSTMLayer(
-    #    load_l_forward_1, h, grad_clipping=grad_clip,
-    #    nonlinearity=lasagne.nonlinearities.tanh)
+    load_l_forward_2 = lasagne.layers.LSTMLayer(
+        load_l_forward_1, h, grad_clipping=grad_clip,
+        nonlinearity=lasagne.nonlinearities.tanh)
 
-    load_l_forward_slice = lasagne.layers.SliceLayer(load_l_forward_1, -1, 1)
+    load_l_forward_slice = lasagne.layers.SliceLayer(load_l_forward_2, -1, 1)
 
     load_l_out = lasagne.layers.DenseLayer(
         load_l_forward_slice, num_units=n_dir, W=lasagne.init.Normal(), nonlinearity=lasagne.nonlinearities.softmax
@@ -54,7 +54,7 @@ def main(dd):
     # test
     perm = np.random.permutation(len(data_x))
     perm_data_x = data_x[perm[:n_test]]
-    perm_data_y = data_y[perm[:n_test]]
+    perm_data_y = data_y[0][perm[:n_test]]
     y_test = np.zeros(n_test)
     x_test = np.zeros((n_test, len_sample, 2))
     for i in range(n_test):
@@ -99,5 +99,5 @@ def write_model_data(model, filename):
         pickle.dump(data, f)
 
 if __name__ == '__main__':
-    date = '19:30_21:10:2015'
+    date = '17:10:2015'
     main(date)

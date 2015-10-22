@@ -19,7 +19,7 @@ data_y = loadmat('direction_dataset_noZERO.mat')['Y_train_1']
 
 n_dir = 9
 
-h = 300
+h = 256
 eta = 0.001
 grad_clip = 100
 epochs = 30
@@ -33,15 +33,22 @@ reg = 1e-3
 
 # Extract test set
 n_test = 200  # 10% for test
+
 perm_test = np.random.permutation(len(data_x))
-perm_data_x_test = data_x[perm_test[:n_test]]
-perm_data_y_test = data_y[perm_test[:n_test]]
+data_x = data_x[perm_test]
+data_y = data_y[perm_test]
+perm_data_x_test = data_x[:n_test]
+perm_data_y_test = data_y[:n_test]
 y_test = np.zeros(n_test)
 x_test = np.zeros((n_test, len_sample, 2))
-perm_data_x_val = data_x[perm_test[n_test:2*n_test]]
-perm_data_y_val = data_y[perm_test[n_test:2*n_test]]
+perm_data_x_val = data_x[n_test:2*n_test]
+perm_data_y_val = data_y[n_test:2*n_test]
 y_val = np.zeros(n_test)
 x_val = np.zeros((n_test, len_sample, 2))
+data_x = data_x[2*n_test:]
+data_y = data_y[2*n_test:]
+y_train = np.zeros(len(data_y))
+x_train = np.zeros((len(data_x), len_sample, 2))
 
 
 for i in range(n_test):
@@ -50,16 +57,6 @@ for i in range(n_test):
     y_val[i] = perm_data_y_val[i]-1  # mmmm...
     x_val[i] = perm_data_x_val[i][0:len_sample]
 
-# get rid of test and val data from the batch
-data_x = data_x[perm_test[n_test*2:]]
-data_y = data_y[perm_test[n_test*2:]]
-
-perm_test = np.random.permutation(len(data_x))
-data_x = data_x[perm_test]
-data_y = data_y[perm_test]
-
-y_train = np.zeros(len(data_x))
-x_train = np.zeros((len(data_x), len_sample, 2))
 
 for i in range(len(data_x)):
     y_train[i] = data_y[i]-1  # mmmm...
