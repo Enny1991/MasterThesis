@@ -14,18 +14,20 @@ np.random.seed(42)
 PARAM_EXTENSION = 'params'
 
 # Rearrange the input from Matlab matricies
-data_x = loadmat('direction_dataset_noZERO.mat')['X_train_final_1']
-data_y = loadmat('direction_dataset_noZERO.mat')['Y_train_1']
+data_x = loadmat('data/direction_dataset_spec_stacked.mat')['XX']
+data_y = loadmat('data/direction_dataset_spec_stacked.mat')['Y_train']
+mask = loadmat('data/direction_dataset_spec_stacked.mat')['MASK']
 
 n_dir = 9
 
-h = 256
-eta = 0.001
+h = 512
+eta = 0.01
 grad_clip = 100
 epochs = 30
 n_batch = 128
-len_sample = 128
+len_sample = 207
 reg = 1e-3
+nfft = 65
 
 
 # I implement 10-fold CV for eta and h
@@ -37,30 +39,40 @@ n_test = 200  # 10% for test
 perm_test = np.random.permutation(len(data_x))
 data_x = data_x[perm_test]
 data_y = data_y[perm_test]
+mask = mask[perm_test]
 perm_data_x_test = data_x[:n_test]
 perm_data_y_test = data_y[:n_test]
+perm_data_mask_test = mask[:n_test]
 y_test = np.zeros(n_test)
-x_test = np.zeros((n_test, len_sample, 2))
+x_test = np.zeros((n_test, len_sample, nfft * 4))
+mask_test = np.zeros((n_test, len_sample))
 perm_data_x_val = data_x[n_test:2*n_test]
 perm_data_y_val = data_y[n_test:2*n_test]
+perm_data_mask_val = mask[n_test:2*n_test]
 y_val = np.zeros(n_test)
-x_val = np.zeros((n_test, len_sample, 2))
+x_val = np.zeros((n_test, len_sample, nfft * 4))
+mask_val = np.zeros((n_test, len_sample))
 data_x = data_x[2*n_test:]
 data_y = data_y[2*n_test:]
+mask = mask[2*n_test:]
 y_train = np.zeros(len(data_y))
-x_train = np.zeros((len(data_x), len_sample, 2))
+x_train = np.zeros((len(data_x), len_sample, nfft * 4))
+mask_train = np.zeros((len(data_x), len_sample))
 
 
 for i in range(n_test):
     y_test[i] = perm_data_y_test[i]-1  # mmmm...
-    x_test[i] = perm_data_x_test[i][0:len_sample]
+    x_test[i] = perm_data_x_test[i]
+    mask_test[i] = perm_data_mask_test[i]
     y_val[i] = perm_data_y_val[i]-1  # mmmm...
-    x_val[i] = perm_data_x_val[i][0:len_sample]
+    x_val[i] = perm_data_x_val[i]
+    mask_val[i] = perm_data_mask_val[i]
 
 
 for i in range(len(data_x)):
     y_train[i] = data_y[i]-1  # mmmm...
-    x_train[i] = data_x[i][0:len_sample]
+    x_train[i] = data_x[i]
+    mask_train[i] = mask[i]
 
 
 epoch_size = (np.floor(len(data_x) / n_batch)).astype(np.int64)
@@ -103,14 +115,13 @@ def gen_input(CV=False, k=0, return_validation=False):
 
 def main(num_epochs=epochs):
     print("Building Network")
-    l_in = lasagne.layers.InputLayer(shape=(n_batch, len_sample, 2))
-    # Could put here amask for the input layer:
-    # l_mask = lasagne.layers.InputLayer(shape=(n_batch, len_sample))
+    l_in = lasagne.layers.InputLayer(shape=(n_batch, len_sample, nfft * 4))  # 4 = 2*RE + 2*IM / None is for variable length of the input
+    # Could put here a mask for the input layer:
+    l_mask = lasagne.layers.InputLayer(shape=(n_batch, len_sample))
 
     # slice the las step to extract label
-    l_forward_1 = lasagne.layers.LSTMLayer(
-        l_in, h, grad_clipping=grad_clip,
-        nonlinearity=lasagne.nonlinearities.tanh)
+    l_forward_1 = lasagne.layers.GRULayer(
+        l_in, h, mask_input=l_mask, grad_clipping=grad_clip)
 
     #l_forward_2 = lasagne.layers.LSTMLayer(
     #    l_forward_1, h, grad_clipping=grad_clip,
@@ -133,12 +144,12 @@ def main(num_epochs=epochs):
     print("Computing updates ...")
     updates = lasagne.updates.adagrad(cost, all_params, eta)
     print("Compiling functions ...")
-    train = theano.function([l_in.input_var, target_values],
+    train = theano.function([l_in.input_var, target_values, l_mask.input_var],
                             [cost], updates=updates, allow_input_downcast=True)
     compute_cost = theano.function(
-        [l_in.input_var, target_values], [cost, acc, network_output], allow_input_downcast=True)
+        [l_in.input_var, target_values, l_mask.input_var], [cost, acc, network_output], allow_input_downcast=True)
 
-    x_val, y_val = gen_input()
+    # x_val, y_val = gen_input()
 
     def f(x):
         return {
@@ -165,11 +176,11 @@ def main(num_epochs=epochs):
                     cont += 1
                     print(f(cont).format(epoch), end="\r")
                 # x, y = gen_input()
-                train(x_train[e*n_batch:(e+1)*n_batch], y_train[e*n_batch:(e+1)*n_batch])
-            cost_val, acc_val, _ = compute_cost(x_val, y_val)
+                train(x_train[e*n_batch:(e+1)*n_batch], y_train[e*n_batch:(e+1)*n_batch], mask_train[e*n_batch:(e+1)*n_batch])
+            cost_val, acc_val, _ = compute_cost(x_val, y_val, mask_val)
             print("Epoch #{} [=========>] cost = {}, acc = {}".format(epoch, cost_val, acc_val))
             cont = 0
-        cost_test, acc_test, output_test = compute_cost(x_test, y_test)
+        cost_test, acc_test, output_test = compute_cost(x_test, y_test, mask_test)
         date = time.strftime("%H:%M_%d:%m:%Y")
         write_model_data(l_out, 'model_{}'.format(date))
         list_hyp = (
