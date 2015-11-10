@@ -14,7 +14,7 @@ def main():
     out, y, inp = read_model_data('00:24_28:10:2015')
     width = 0.35
     plt.figure(figsize=(14, 7))
-    for i in range(len(out)):
+    for i in range(len(out)/50):
         chose = i
         plt.bar(np.arange(0-width, 8+width), out[chose], width)
         plt.xticks(np.arange(0-width, 8)+width/2., [str(i) for i in range(0, 9)])      #plt.xlim([0,1])

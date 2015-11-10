@@ -20,7 +20,7 @@ mask = loadmat('data/direction_dataset_spec_stacked.mat')['MASK']
 
 n_dir = 9
 
-h = 512
+h = 260
 eta = 0.01
 grad_clip = 100
 epochs = 30
@@ -198,7 +198,7 @@ def main(num_epochs=epochs):
 
 
 def dump_param(list_hyp, filename):
-    filename = os.path.join('./', filename)
+    filename = os.path.join('./models/', filename)
     filename = '%s.%s' % (filename, PARAM_EXTENSION)
     with open(filename, 'w') as f:
         pickle.dump(list_hyp, f)
@@ -206,7 +206,7 @@ def dump_param(list_hyp, filename):
 
 def read_model_data(model, filename):
     """Unpickles and loads parameters into a Lasagne model."""
-    filename = os.path.join('./', '%s.%s' % (filename, PARAM_EXTENSION))
+    filename = os.path.join('./models/', '%s.%s' % (filename, PARAM_EXTENSION))
     with open(filename, 'r') as f:
         data = pickle.load(f)
     lasagne.layers.set_all_param_values(model, data)
@@ -215,7 +215,8 @@ def read_model_data(model, filename):
 def write_model_data(model, filename):
     """Pickels the parameters within a Lasagne model."""
     data = lasagne.layers.get_all_param_values(model)
-    filename = os.path.join('./', filename)
+    filename = os.path.join('./models/'
+                            '', filename)
     filename = '%s.%s' % (filename, PARAM_EXTENSION)
     with open(filename, 'w') as f:
         pickle.dump(data, f)
