@@ -285,7 +285,7 @@ Xval, Xmask_val, Yval, Ymask_val, text_inputs_val, text_targets_val = \
     get_batch(batch_size=5000, max_digits=MAX_DIGITS, min_digits=MIN_DIGITS)
 
 val_interval = 5000
-samples_to_process = 3e6
+samples_to_process = 1e5
 samples_processed = 0
 
 val_samples = []
