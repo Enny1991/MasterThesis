@@ -1,0 +1,58 @@
+Doing experiments on the different AE, it look like there is a lot of randomness, that might be that sometimes we are lucky
+with the init. Now I cut down what is going on to 3 options relative to 3 things I am doing:
+
+Normal training = no minibatches, normal mean squared error,
+With minibatches
+With different normalization of the loss function
+
+I think all this will effect also the VAE, I really want to see when the FUCK the AE is learning to map everything in
+the same output, might be overwhelming weights
+
+The outcome looks pretty random but can be cut down to 3 different cases
+FIX, the reconstruction is the same for all possible inputs
+CLUTTERED, reconstruction is kind of similar but is pretty quantized
+DIE or MAGNIFICATION, the weights either die or make the rec to explode
+
+In general the rec starts getting better after a while, I guess when the values stsrt making sense and they are not
+close to zero.
+
+Interesting fact: in the middle part it looks like sometimes the reconstruction is good but with the opposite sign,
+should look into it
+
+Something important is also to look why sometimes one neuron gets all the signal and the second one gets none
+
+########## EXPERIMENTS ###########
+
+Set up normal loss function but with batches of 64 with 15 epochs for layer 1 and 50 epochs for layer 2
+around time 4 i get something like good reconstruction but a bit weak.
+Time 6 still not bad in shape but weak
+time 7 strangely the activity has exploded here,
+and now it got kicked down
+The problem is that when the rec is too weak I really loose a lot of signal especially if i need to reconstruct speech
+Around time 13 the rec is not bad, 13 means 13*8 ms which are more or less 100 ms after the beginning that should mean
+that there is something
+Neuron 2 (green signal) is still pretty silent, but the reconstruction start being not bad, still not like this morning
+though.
+In all this it looks to me that the auto-encoder is still too slow to follow the signal.
+It is slowly dying...
+
+Stopped it to look at what is the rec in the internal layer, I put some more epochs (25-50)
+Rec from first layer is good, this means that the first layer works fine, The second show exactly one of the problems
+mentioned before, namely every input is mapped into the same reconstruction.
+At time=4 I start seeing some arrangments, THIS is the layer that is slow in following! (ERROR propagation !?)
+minibatches solved the problem for the first layer, I'll try to increase the number of minibatches for the layer 2.
+Getting there.... at time 2 the rec is super good!
+Stop and I will look at all the stages to see how much the single rec influences the complete pipeline
+I loose a lot of energy in the second layer
+
+
+[checking that the commands for complete and latent rec give the same res, yeah looks like]
+With adam the first step is really good everything else is pretty slow
+
+rec is good now but pretty at high energy...
+but when I reconstruct my signal that is pretty low
+
+
+------- My_VAE -------
+I am trying different things with it, mainly I have the same problems as in the normal one, namely learning random bars
+

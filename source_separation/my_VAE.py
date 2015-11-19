@@ -236,7 +236,7 @@ class VAE:
         for i in range(len(n_hidden)):
             l_tmp_encoder = lasagne.layers.DenseLayer(l_prev_encoder,
                                                       num_units=n_hidden[i],
-                                                      W=lasagne.init.GlorotUniform(),
+                                                      W=lasagne.init.Uniform(),
                                                       nonlinearity=self.transf)
             l_prev_encoder = l_tmp_encoder
 
@@ -248,7 +248,7 @@ class VAE:
         for i in range(len(n_hidden_decoder)):
             l_tmp_decoder = lasagne.layers.DenseLayer(l_prev_decoder,
                                                       num_units=n_hidden_decoder[-(i + 1)],
-                                                      W=lasagne.init.GlorotUniform(),
+                                                      W=lasagne.init.Uniform(),
                                                       nonlinearity=self.transf)
 
             l_prev_decoder = l_tmp_decoder
@@ -258,7 +258,7 @@ class VAE:
                               encoder=l_prev_encoder,
                               decoder=l_prev_decoder,
                               latent_size=n_out,
-                              x_distribution='gaussian',
+                              x_distribution='bernoulli',
                               qz_distribution='gaussian',
                               pz_distribution='gaussian')
         self.x = T.matrix('x')
@@ -310,7 +310,7 @@ mask = np.array([1, 0])
 all_params = None
 c_mat_sym = T.dmatrix()
 
-model = VAE(d, [300, 400], 2, trans_func=rectify, batch_size=128)
+model = VAE(d, [200], 2, trans_func=rectify, batch_size=128)
 rng = np.random.RandomState(42)
 for t in range(time):
     x = cor[t, :, :]
@@ -323,56 +323,54 @@ for t in range(time):
         x_prime[rate*freq:(rate+1)*freq, 0] = np.real((d11 + d22) / 2)
         c_mat[:-1, slice(rate * freq, (rate + 1) * freq)] = np.real((d1 + d2) / 2)
 
-    m_min = np.min(c_mat)
-    m_max = np.max(c_mat)
-    # print m_min
-    # print m_max
-    c_mat = (c_mat - m_min)
+
     # print c_mat
     # m_max = np.max(np.abs(c_mat))
     # print m_max
     # c_mat /= m_max
     x_prime = x_prime.transpose()
     c_mat[-1, :] = x_prime
+    m_min = np.min(c_mat)
+    m_max = np.max(c_mat)
+    # print m_min
+    # print m_max
+    c_mat = (c_mat - m_min) / (m_max - m_min)
     # c_mat is ready to be fed and train the VAE the whole training set has 'freq' #samples
     shared_c_mat = theano.shared(np.asarray(c_mat, dtype=theano.config.floatX), borrow=True)
     shared_x_prime = theano.shared(np.asarray(x_prime, dtype=theano.config.floatX), borrow=True)
 
     # print c_mat.shape
 
-    train_model = model.build_model(shared_c_mat, adam, update_args=(1e-4,))
+    train_model = model.build_model(shared_c_mat, adam, update_args=(1e-3,))
     eval_train = []
     eval_test = []
     eval_valid = []
     start_time = tm.time()
     for epoch in range(n_epochs):
-        idx = np.random.permutation(freq+1).astype('int32')
+        idx = np.random.randint(0, freq+1, size=128).astype('int32')
         for i in range(4):
             eval_train += [train_model(idx)]
         log_pz, log_qz_given_x, log_px_given_z = model.model.get_log_distributions(shared_c_mat)
     end_time = tm.time() - start_time
     print "[time %i, time %.2f ,train %.10f]" % (t, end_time, eval_train[epoch])
-    z = model.get_output(shared_x_prime)
-    x_recon_mu, x_recon_sigma = model.get_reconstruction(z)
-    x_recon_mu = x_recon_mu.reshape((d,))
+
 
     z_mat = model.get_output(shared_c_mat)
-    c_recon_mu, c_recon_sigma = model.get_reconstruction(z_mat)
+    c_recon_mu= model.get_reconstruction(z_mat)
 
     # samples = np.zeros_like(c_mat)
     # for i in range(freq):
     #     samples[i, :] = rng.multivariate_normal(x_recon_mu.eval().reshape((d,)),
     #                                             np.diag(T.exp(x_recon_sigma).eval().reshape((d,))))
     # print samples.shape
-    print x_recon_mu.eval().shape
     plt.figure
     plt.subplot(1, 2, 1)
-    plt.imshow(c_mat, interpolation='nearest', aspect='auto')
+    plt.imshow(c_mat, interpolation='nearest', aspect='auto',cmap='gray')
     plt.subplot(1, 2, 2)
-    plt.imshow(c_recon_mu.eval(), interpolation='nearest', aspect='auto')
+    plt.imshow(c_recon_mu.eval(), interpolation='nearest', aspect='auto',cmap='gray')
     # tx = np.arange(d)
     # plt.plot(tx, c_recon_mu.eval()[0, :], 'b', tx, c_mat[0, :], 'r')
     plt.show()
-    rec_cor[t, :, :rates/2] = x_recon_mu.eval().reshape(freq, rates/2)
+    rec_cor[t, :, :rates/2] = c_recon_mu.eval()[-1].reshape(freq, rates/2)
 
 savemat('come_done_filtered.mat', {'rec_cor': rec_cor})

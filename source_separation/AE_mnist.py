@@ -142,36 +142,27 @@ class AE(Layer):
 
 
 # from here we apply our data
-cor = loadmat('../data/come_done_COR.mat')['COR']
-rec_cor_1 = np.zeros_like(cor)
-rec_cor_2 = np.zeros_like(cor)
-# so the dataset is created online, for every timestep I need to compute the C-mat and train a new VAE with that
-time, freq, rates = cor.shape
-d = freq * rates / 2
-c_mat = np.zeros(shape=(freq+1, d))
-n_epochs = 30
-mask = np.zeros((freq+1, 2))
-mask2 = np.zeros((freq+1, 2))
-mask[:, 0] = 1.
-mask[:, 1] = 1.
-all_params = None
+
+d = 784
+
+n_epochs = 100
 
 # fake data for debugginf
 x_sym = T.dmatrix()
 latent_sym = T.dmatrix()
 mask_sym = T.dmatrix()
-x_fake = np.ones((64, d))
-x_fake_2 = np.ones((32, d))
+x_fake = np.ones((500, d))
+x_fake_2 = np.ones((500, d))
 
 # create the model UGLY
 l_in_1 = lasagne.layers.InputLayer(shape=(None, d))
-l_AE_1 = AE(l_in_1, 200, batch_size=64, nonlinearity=rectify, p=0.0)
+l_AE_1 = AE(l_in_1, 200, batch_size=500, nonlinearity=rectify, p=0.0)
 
 # fake_latent = l_AE_1.get_output_latent(x_sym).eval({x_sym: x_fake})
 # print "1 latent {}".format(fake_latent.shape)
 # print "1 recon {}".format(l_AE_1.get_complete_reconstruction(x_sym).eval({x_sym: x_fake}).shape)
 l_in_2 = lasagne.layers.InputLayer(shape=(None, 200))
-l_AE_2 = AE(l_in_2, 2, batch_size=32, nonlinearity=rectify)
+l_AE_2 = AE(l_in_2, 2, batch_size=500, nonlinearity=rectify)
 #
 # fake_latent_2 = l_AE_2.get_output_latent(latent_sym).eval({latent_sym: fake_latent})
 # print "1 latent {}".format(fake_latent_2.shape)
@@ -187,32 +178,34 @@ l_AE_2 = AE(l_in_2, 2, batch_size=32, nonlinearity=rectify)
 train_model_1 = l_AE_1.build_model(adam, 1e-3)
 train_model_2 = l_AE_2.build_model(adam, 1e-3)
 
-for t in range(time):
-    x = cor[t, :, :]
-    x_prime = np.zeros((d, 1))
-    for rate in range(rates/2):
-        d11 = x[:, rate]
-        d1 = np.outer(d11, d11)
-        d22 = x[:, rates/2 + rate]
-        d2 = np.outer(d22, d22)
-        x_prime[rate*freq:(rate+1)*freq, 0] = np.real((d11 + d22) / 2)
-        c_mat[:-1, slice(rate * freq, (rate + 1) * freq)] = np.real((d1 + d2) / 2)
-    x_prime = x_prime.transpose()
-    c_mat[-1, :] = x_prime
+def load_mnist():
 
-    for epoch in range(n_epochs):
-        c_mat_sc = c_mat[np.random.randint(0, freq+1, size=(freq+1))]
-        for i in range(8):
-            eval_train = train_model_1(c_mat_sc[i*64:(1+i)*64])
-    print "Layer 1 %.10f (time=%i)" % (eval_train, t)
+    data = np.load('../data/mnist.npz')
+    num_classes = 10
+    x_train, targets_train = data['X_train'].astype('float32'), data['y_train']
+    x_valid, targets_valid = data['X_valid'].astype('float32'), data['y_valid']
+    x_test, targets_test = data['X_test'].astype('float32'), data['y_test']
 
-    z = l_AE_1.get_output_latent(x_sym, deterministic=True).eval({x_sym: c_mat})
 
-    for epoch in range(100):
-        z_sc = z[np.random.randint(0, freq+1, size=(freq+1))]
-        for i in range(16):
-            eval_train = train_model_2(z_sc[i*32:(1+i)*32])
-    print "Layer 1 %.10f (time=%i)" % (eval_train, t)
+    return (x_train, targets_train), (x_test, targets_test), (x_valid, targets_valid)
+
+
+(train_x, train_t), (test_x, test_t), (valid_x, valid_t) = load_mnist()
+total = train_x.shape[0]
+
+for epoch in range(n_epochs):
+    for i in range(total/500):
+        t_batch = train_x[i*500:(i+1)*500]
+        eval_train = train_model_1(t_batch)
+    print "Layer 1 %.10f (time=%i)" % (eval_train,epoch)
+
+z = l_AE_1.get_output_latent(x_sym, deterministic=True).eval({x_sym: test_x})
+
+# for epoch in range(1):
+#     for i in range(total/500):
+#         t_batch = z[i*500:(i+1)*500]
+#         eval_train = train_model_2(t_batch)
+#     print "Layer 2 %.10f (time=%i)" % (eval_train,epoch)
 
     # z_prime = l_AE_1.get_output_latent(x_sym).eval({x_sym: x_prime})
     # half_way_1 = l_AE_2.get_complete_reconstruction(x_sym, mask_sym).eval({x_sym: z_prime, mask_sym: mask})
@@ -223,39 +216,33 @@ for t in range(time):
     #err = (x_prime - x_recon_1)**2
     # let's do it step by step
 
-    enc1 = l_AE_1.get_output_latent(x_sym, deterministic=True).eval({x_sym: c_mat})
-    enc2 = l_AE_2.get_output_latent(x_sym, deterministic=True).eval({x_sym: enc1})
-    dec1 = l_AE_2.get_reconstruction_from_latent(x_sym, deterministic=True).eval({x_sym: enc2})
-    dec2 = l_AE_1.get_reconstruction_from_latent(x_sym, deterministic=True).eval({x_sym: dec1})
+enc1 = l_AE_1.get_output_latent(x_sym, deterministic=True).eval({x_sym: test_x})
+enc2 = l_AE_2.get_output_latent(x_sym, deterministic=True).eval({x_sym: enc1})
+dec1 = l_AE_2.get_reconstruction_from_latent(x_sym, deterministic=True).eval({x_sym: enc2})
+dec2 = l_AE_1.get_reconstruction_from_latent(x_sym, deterministic=True).eval({x_sym: z})
 
-    dec_from_enc1 = l_AE_1.get_reconstruction_from_latent(x_sym, deterministic=True).eval({x_sym: enc1})
+dec_from_enc1 = l_AE_1.get_reconstruction_from_latent(x_sym, deterministic=True).eval({x_sym: enc1})
 
-    # c_comp = l_AE_1.get_complete_reconstruction(x_sym).eval({x_sym: c_mat})
-    # z = l_AE_1.get_output_latent(x_sym).eval({x_sym: c_mat})
-    # half_way = l_AE_2.get_complete_reconstruction(x_sym).eval({x_sym: z})
-    # half_way_1 = l_AE_2.get_complete_reconstruction(x_sym, mask_sym).eval({x_sym: z, mask_sym: mask})
-    # half_way_2 = l_AE_2.get_complete_reconstruction(x_sym, mask_sym).eval({x_sym: z, mask_sym: mask2})
-    # c_recon_1 = l_AE_1.get_reconstruction_from_latent(x_sym).eval({x_sym: half_way_1})
-    # c_recon_2 = l_AE_1.get_reconstruction_from_latent(x_sym).eval({x_sym: half_way_2})
-    # c_recon = l_AE_1.get_reconstruction_from_latent(x_sym).eval({x_sym: half_way})
 
-    plt.figure
-    plt.subplot(2, 3, 1)
-    plt.imshow(c_mat, interpolation='nearest', aspect='auto')
-    plt.subplot(2, 3, 2)
-    plt.imshow(dec_from_enc1, interpolation='nearest', aspect='auto')
-    plt.subplot(2, 3, 3)
-    # print dec_from_enc1
-    plt.imshow(dec2, interpolation='nearest', aspect='auto')
-    plt.subplot(2, 3, 4)
-    # print dec2
-    plt.imshow(z, interpolation='nearest', aspect='auto')
-    plt.subplot(2, 3, 5)
-    plt.imshow(dec1, interpolation='nearest', aspect='auto')
-    rec_cor_1[t, :, :rates/2] = dec2[-1].reshape(freq, rates/2)
-    rec_cor_2[t, :, :rates/2] = dec2[-1].reshape(freq, rates/2)
-    tx = np.arange(d)
-    plt.subplot(2, 3, 6)
-    plt.plot(tx, dec2[-1], 'r',  tx, dec2[-1], 'g', tx, c_mat[- 1], 'b')
-    plt.show()
-savemat('come_done_filtered.mat', {'rec_cor_1': rec_cor_1, 'rec_cor_2': rec_cor_2})
+
+print dec2.shape
+print test_x.shape
+fig = plt.figure()
+i = 0
+test_x_eval = test_x
+subset = np.random.randint(0, len(test_x_eval), size=50)
+img_out = np.zeros((28 * 2, 28 * len(subset)))
+x = np.array(test_x_eval)[np.array(subset)]
+for y in range(len(subset)):
+    x_a, x_b = 0 * 28, 1 * 28
+    x_recon_a, x_recon_b = 1 * 28, 2 * 28
+    ya, yb = y * 28, (y + 1) * 28
+    im = np.reshape(x[i], (28, 28))
+    im_recon = np.reshape(dec2[i], (28, 28))
+    img_out[x_a:x_b, ya:yb] = im
+    img_out[x_recon_a:x_recon_b, ya:yb] = im_recon
+    i += 1
+m = plt.matshow(img_out, cmap='gray')
+plt.xticks(np.array([]))
+plt.yticks(np.array([]))
+plt.show()
