@@ -2,6 +2,7 @@ import theano
 import numpy as np
 import theano.tensor as T
 import lasagne
+from scipy.io import loadmat, savemat
 from lasagne.layers import DenseLayer, DropoutLayer, InputLayer, Layer
 from lasagne.nonlinearities import linear, rectify, identity
 from lasagne.objectives import squared_error
@@ -11,8 +12,9 @@ from matplotlib import pyplot as plt
 from lasagne import init
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 import math
+import time as tm
 
-
+theano.config.floatX = 'float64'
 def _shared_dataset(data_xy, borrow=True):
     data_x, data_y = data_xy
     shared_x = theano.shared(np.asarray(data_x, dtype=theano.config.floatX), borrow=borrow)
@@ -53,10 +55,11 @@ def normal2(x, mean, logvar):
 def standard_normal(x):
     return c - x**2 / 2
 
+
 class VAELayer(Layer):
 
     def __init__(self, incoming, encoder, decoder,
-                 x_distribution='bernoulli',
+                 x_distribution='gaussian',
                  pz_distribution='gaussian',
                  qz_distribution='gaussian',
                  latent_size=50,
@@ -122,7 +125,7 @@ class VAELayer(Layer):
                                              self.b_enc_to_z_mu,
                                              self.W_enc_to_z_logsigma,
                                              self.b_enc_to_z_logsigma] + self.params_decoder + \
-                      [self.W_dec_to_x_mu, self.b_dec_to_x_mu] + params_tmp
+                                            [self.W_dec_to_x_mu, self.b_dec_to_x_mu] + params_tmp
 
         self.W_enc_to_z_mu.name = "VAELayer: W_enc_to_z_mu"
         self.W_enc_to_z_logsigma.name = "VAELayer: W_enc_to_z_logsigma"
@@ -214,7 +217,7 @@ class VAELayer(Layer):
 class VAE:
     def __init__(self, n_in, n_hidden, n_out,
                  n_hidden_decoder=None,
-                 trans_func=rectify, batch_size=100):
+                 trans_func=rectify, batch_size=513):
         self.n_in = n_in
         self.n_hidden = n_hidden
         self.n_out = n_out
@@ -233,7 +236,7 @@ class VAE:
         for i in range(len(n_hidden)):
             l_tmp_encoder = lasagne.layers.DenseLayer(l_prev_encoder,
                                                       num_units=n_hidden[i],
-                                                      W=lasagne.init.Uniform(),
+                                                      W=lasagne.init.GlorotUniform(),
                                                       nonlinearity=self.transf)
             l_prev_encoder = l_tmp_encoder
 
@@ -245,7 +248,7 @@ class VAE:
         for i in range(len(n_hidden_decoder)):
             l_tmp_decoder = lasagne.layers.DenseLayer(l_prev_decoder,
                                                       num_units=n_hidden_decoder[-(i + 1)],
-                                                      W=lasagne.init.Uniform(),
+                                                      W=lasagne.init.GlorotUniform(),
                                                       nonlinearity=self.transf)
 
             l_prev_decoder = l_tmp_decoder
@@ -255,21 +258,18 @@ class VAE:
                               encoder=l_prev_encoder,
                               decoder=l_prev_decoder,
                               latent_size=n_out,
-                              x_distribution='bernoulli',
+                              x_distribution='gaussian',
                               qz_distribution='gaussian',
                               pz_distribution='gaussian')
         self.x = T.matrix('x')
 
-    def build_model(self, train_x, test_x, valid_x, update, update_args):
+    def build_model(self, train_x, update, update_args):
         self.train_x = train_x
-        self.test_x = test_x
-        self.validation_x = valid_x
         self.update = update
         self.update_args = update_args
-        self.index = T.iscalar('index')
-        self.batch_slice = slice(self.index * self.batch_size, (self.index + 1) * self.batch_size)
-
-        x = self.srng.binomial(size=self.x.shape, n=1, p=self.x)
+        self.index = T.ivector('index')
+        self.slice = self.index[:self.batch_size]
+        # x = self.srng.binomial(size=self.x.shape, n=1, p=self.x)
         log_pz, log_qz_given_x, log_px_given_z = self.model.get_log_distributions(self.x)
         loss_eval = (log_pz + log_px_given_z - log_qz_given_x).sum()
         loss_eval /= self.batch_size
@@ -278,15 +278,9 @@ class VAE:
         updates = self.update(-loss_eval, all_params, *self.update_args)
 
         train_model = theano.function([self.index], loss_eval, updates=updates,
-                                      givens={self.x: self.train_x[self.batch_slice], },)
+                                      givens={self.x: self.train_x[self.slice], },)
 
-        test_model = theano.function([self.index], loss_eval,
-                                     givens={self.x: self.test_x[self.batch_slice], },)
-
-        validate_model = theano.function([self.index], loss_eval,
-                                         givens={self.x: self.validation_x[self.batch_slice], },)
-
-        return train_model, test_model, validate_model
+        return train_model
 
     def draw_sample(self, z):
         return self.model.draw_sample(z)
@@ -298,75 +292,87 @@ class VAE:
     def get_reconstruction(self, z):
         return self.model.decoder_output(z)
 
-from random import shuffle
-def load_mnist():
-
-    data = np.load('data/mnist.npz')
-    num_classes = 10
-    x_train, targets_train = data['X_train'].astype('float32'), data['y_train']
-    x_valid, targets_valid = data['X_valid'].astype('float32'), data['y_valid']
-    x_test, targets_test = data['X_test'].astype('float32'), data['y_test']
+    def get_params(self):
+        return get_all_params(self.model)
 
 
-    def shared_dataset(x, y, borrow=True):
-        shared_x = theano.shared(np.asarray(x, dtype=theano.config.floatX), borrow=borrow)
-        shared_y = theano.shared(np.asarray(y, dtype=theano.config.floatX), borrow=borrow)
-        return shared_x, shared_y
-
-    return shared_dataset(x_train, targets_train), shared_dataset(x_test, targets_test), shared_dataset(x_valid, targets_valid)
 
 
-(train_x, train_t), (test_x, test_t), (valid_x, valid_t) = load_mnist()
+# from here we apply our data
+cor = loadmat('../data/come_done_COR.mat')['COR']
+rec_cor = np.zeros_like(cor)
+# so the dataset is created online, for every timestep I need to compute the C-mat and train a new VAE with that
+time, freq, rates = cor.shape
+d = freq * rates / 2
+c_mat = np.zeros(shape=(freq+1, d))
+n_epochs = 20
+mask = np.array([1, 0])
+all_params = None
+c_mat_sym = T.dmatrix()
 
-model = VAE(784, [200, 200], 2, trans_func=rectify, batch_size=100)
-train_model, test_model, valid_model = model.build_model(train_x, test_x, valid_x, adam, update_args=(1e-3,))
+model = VAE(d, [300, 400], 2, trans_func=rectify, batch_size=128)
+rng = np.random.RandomState(42)
+for t in range(time):
+    x = cor[t, :, :]
+    x_prime = np.zeros((d, 1))
+    for rate in range(rates/2):
+        d11 = x[:, rate]
+        d1 = np.outer(d11, d11)
+        d22 = x[:, rates/2 + rate]
+        d2 = np.outer(d22, d22)
+        x_prime[rate*freq:(rate+1)*freq, 0] = np.real((d11 + d22) / 2)
+        c_mat[:-1, slice(rate * freq, (rate + 1) * freq)] = np.real((d1 + d2) / 2)
 
+    m_min = np.min(c_mat)
+    m_max = np.max(c_mat)
+    # print m_min
+    # print m_max
+    c_mat = (c_mat - m_min)
+    # print c_mat
+    # m_max = np.max(np.abs(c_mat))
+    # print m_max
+    # c_mat /= m_max
+    x_prime = x_prime.transpose()
+    c_mat[-1, :] = x_prime
+    # c_mat is ready to be fed and train the VAE the whole training set has 'freq' #samples
+    shared_c_mat = theano.shared(np.asarray(c_mat, dtype=theano.config.floatX), borrow=True)
+    shared_x_prime = theano.shared(np.asarray(x_prime, dtype=theano.config.floatX), borrow=True)
 
-import time
-batch_size = 500
-n_epochs = 50
-eval_train = {}
-eval_test = {}
-eval_valid = {}
-n_train_batches = train_x.get_value(borrow=True).shape[0] / batch_size
-n_test_batches = test_x.get_value(borrow=True).shape[0] / batch_size
-n_valid_batches = valid_x.get_value(borrow=True).shape[0] / batch_size
+    # print c_mat.shape
 
-for epoch in range(n_epochs):
-    start_time = time.time()
-    avg_costs = []
-    for minibatch_index in xrange(n_train_batches):
-        minibatch_avg_cost = train_model(minibatch_index)
-        avg_costs.append(minibatch_avg_cost)
-    eval_train[epoch] = np.mean(avg_costs)
-    test_losses = [test_model(i) for i in xrange(n_test_batches)]
-    valid_losses = [valid_model(i) for i in xrange(n_valid_batches)]
-    eval_test[epoch] = np.mean(test_losses)
-    eval_valid[epoch] = np.mean(valid_losses)
-    end_time = time.time() - start_time
-    print "[epoch,time,train,valid,test];%i;%.2f;%.10f;%.10f;%.10f" % (epoch, end_time, eval_train[epoch], eval_valid[epoch], eval_test[epoch])
-    log_pz, log_qz_given_x, log_px_given_z = model.model.get_log_distributions(test_x)
+    train_model = model.build_model(shared_c_mat, adam, update_args=(1e-4,))
+    eval_train = []
+    eval_test = []
+    eval_valid = []
+    start_time = tm.time()
+    for epoch in range(n_epochs):
+        idx = np.random.permutation(freq+1).astype('int32')
+        for i in range(4):
+            eval_train += [train_model(idx)]
+        log_pz, log_qz_given_x, log_px_given_z = model.model.get_log_distributions(shared_c_mat)
+    end_time = tm.time() - start_time
+    print "[time %i, time %.2f ,train %.10f]" % (t, end_time, eval_train[epoch])
+    z = model.get_output(shared_x_prime)
+    x_recon_mu, x_recon_sigma = model.get_reconstruction(z)
+    x_recon_mu = x_recon_mu.reshape((d,))
 
-test_x_eval = test_x.eval()
-subset = np.random.randint(0, len(test_x_eval), size=50)
-x = np.array(test_x_eval)[np.array(subset)]
-z = model.get_output(x)
-x_recon = model.get_reconstruction(z).eval()
+    z_mat = model.get_output(shared_c_mat)
+    c_recon_mu, c_recon_sigma = model.get_reconstruction(z_mat)
 
-print x_recon.shape
-fig = plt.figure()
-i = 0
-img_out = np.zeros((28 * 2, 28 * len(subset)))
-for y in range(len(subset)):
-    x_a, x_b = 0 * 28, 1 * 28
-    x_recon_a, x_recon_b = 1 * 28, 2 * 28
-    ya, yb = y * 28, (y + 1) * 28
-    im = np.reshape(x[i], (28, 28))
-    im_recon = np.reshape(x_recon[i], (28, 28))
-    img_out[x_a:x_b, ya:yb] = im
-    img_out[x_recon_a:x_recon_b, ya:yb] = im_recon
-    i += 1
-m = plt.matshow(img_out, cmap='gray')
-plt.xticks(np.array([]))
-plt.yticks(np.array([]))
-plt.show()
+    # samples = np.zeros_like(c_mat)
+    # for i in range(freq):
+    #     samples[i, :] = rng.multivariate_normal(x_recon_mu.eval().reshape((d,)),
+    #                                             np.diag(T.exp(x_recon_sigma).eval().reshape((d,))))
+    # print samples.shape
+    print x_recon_mu.eval().shape
+    plt.figure
+    plt.subplot(1, 2, 1)
+    plt.imshow(c_mat, interpolation='nearest', aspect='auto')
+    plt.subplot(1, 2, 2)
+    plt.imshow(c_recon_mu.eval(), interpolation='nearest', aspect='auto')
+    # tx = np.arange(d)
+    # plt.plot(tx, c_recon_mu.eval()[0, :], 'b', tx, c_mat[0, :], 'r')
+    plt.show()
+    rec_cor[t, :, :rates/2] = x_recon_mu.eval().reshape(freq, rates/2)
+
+savemat('come_done_filtered.mat', {'rec_cor': rec_cor})

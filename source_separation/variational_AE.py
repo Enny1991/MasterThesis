@@ -1,57 +1,26 @@
 import theano
-import numpy as np
+theano.config.floatX = 'float32'
 import theano.tensor as T
-import lasagne
-from lasagne.layers import DenseLayer, DropoutLayer, InputLayer, Layer
-from lasagne.nonlinearities import linear, rectify, identity
-from lasagne.objectives import squared_error
-from lasagne.layers import get_all_layers, get_output, get_all_params, InputLayer
-from lasagne.updates import adam
-from matplotlib import pyplot as plt
-from lasagne import init
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
+from lasagne.nonlinearities import rectify
+from lasagne.layers.base import Layer
+from lasagne import init
+from lasagne.updates import adam
+from lasagne.layers import InputLayer, get_all_params
+import numpy as np
+import lasagne
 import math
 
-
-def _shared_dataset(data_xy, borrow=True):
-    data_x, data_y = data_xy
-    shared_x = theano.shared(np.asarray(data_x, dtype=theano.config.floatX), borrow=borrow)
-    shared_y = theano.shared(np.asarray(data_y, dtype=theano.config.floatX), borrow=borrow)
-    return shared_x, shared_y
-
-
-def generate_synthetic_data(dat_size=1.e4):
-    rng = np.random.RandomState(42)
-    v = rng.normal(0, .02, size=dat_size).reshape((dat_size, 1))
-    x = rng.uniform(0., 1., size=dat_size).reshape((dat_size, 1))
-    y = x + 0.3 * np.sin(2 * np.pi * (x + v)) + 0.3 * np.sin(4*np.pi*(x + v)) + v
-
-    train_x = x[:dat_size/2]
-    train_y = y[:dat_size/2]
-
-    test_x = x[dat_size/2 + 1:]
-    test_y = y[dat_size/2 + 1:]
-
-    return _shared_dataset((train_x, train_y)), _shared_dataset((test_x, test_y))
-
-((train_x, train_y), (test_x, test_y)) = generate_synthetic_data(1e4)
-
-test_x_unshared = test_x.eval()
-test_y_unshared = test_y.eval()
-
 c = - 0.5 * math.log(2*math.pi)
-
-
 def normal(x, mean, sd):
     return c - T.log(T.abs_(sd)) - (x - mean)**2 / (2 * sd**2)
-
 
 def normal2(x, mean, logvar):
     return c - logvar/2 - (x - mean)**2 / (2 * T.exp(logvar))
 
-
 def standard_normal(x):
     return c - x**2 / 2
+
 
 class VAELayer(Layer):
 
@@ -210,38 +179,30 @@ class VAELayer(Layer):
             z = self._srng.normal((self.num_batch, self.latent_size))
         return self.decoder_output(z, *args, **kwargs)
 
-
 class VAE:
-    def __init__(self, n_in, n_hidden, n_out,
-                 n_hidden_decoder=None,
-                 trans_func=rectify, batch_size=100):
+    def __init__(self, n_in, n_hidden, n_out, n_hidden_decoder=None, trans_func=rectify, batch_size=100):
         self.n_in = n_in
         self.n_hidden = n_hidden
         self.n_out = n_out
-        self.l_in = InputLayer((batch_size, n_in))
         self.batch_size = batch_size
         self.transf = trans_func
+        self.l_in = InputLayer(shape=(batch_size,n_in))
 
         self.srng = RandomStreams()
 
         l_in_encoder = lasagne.layers.InputLayer(shape=(batch_size, n_in))
         l_in_decoder = lasagne.layers.InputLayer(shape=(batch_size, n_out))
-
         l_prev_encoder = l_in_encoder
         l_prev_decoder = l_in_decoder
-
         for i in range(len(n_hidden)):
             l_tmp_encoder = lasagne.layers.DenseLayer(l_prev_encoder,
                                                       num_units=n_hidden[i],
                                                       W=lasagne.init.Uniform(),
                                                       nonlinearity=self.transf)
             l_prev_encoder = l_tmp_encoder
-
-        # cause you might want a decoder which is not the mirror of the encoder
         if n_hidden_decoder is None:
             n_hidden_decoder = n_hidden
         self.n_hidden_decoder = n_hidden_decoder
-
         for i in range(len(n_hidden_decoder)):
             l_tmp_decoder = lasagne.layers.DenseLayer(l_prev_decoder,
                                                       num_units=n_hidden_decoder[-(i + 1)],
@@ -256,8 +217,8 @@ class VAE:
                               decoder=l_prev_decoder,
                               latent_size=n_out,
                               x_distribution='bernoulli',
-                              qz_distribution='gaussian',
-                              pz_distribution='gaussian')
+                              qz_distribution='gaussianmarg', #gaussianmarg
+                              pz_distribution='gaussianmarg')
         self.x = T.matrix('x')
 
     def build_model(self, train_x, test_x, valid_x, update, update_args):
@@ -301,7 +262,7 @@ class VAE:
 from random import shuffle
 def load_mnist():
 
-    data = np.load('data/mnist.npz')
+    data = np.load('../data/mnist.npz')
     num_classes = 10
     x_train, targets_train = data['X_train'].astype('float32'), data['y_train']
     x_valid, targets_valid = data['X_valid'].astype('float32'), data['y_valid']
@@ -346,27 +307,3 @@ for epoch in range(n_epochs):
     end_time = time.time() - start_time
     print "[epoch,time,train,valid,test];%i;%.2f;%.10f;%.10f;%.10f" % (epoch, end_time, eval_train[epoch], eval_valid[epoch], eval_test[epoch])
     log_pz, log_qz_given_x, log_px_given_z = model.model.get_log_distributions(test_x)
-
-test_x_eval = test_x.eval()
-subset = np.random.randint(0, len(test_x_eval), size=50)
-x = np.array(test_x_eval)[np.array(subset)]
-z = model.get_output(x)
-x_recon = model.get_reconstruction(z).eval()
-
-print x_recon.shape
-fig = plt.figure()
-i = 0
-img_out = np.zeros((28 * 2, 28 * len(subset)))
-for y in range(len(subset)):
-    x_a, x_b = 0 * 28, 1 * 28
-    x_recon_a, x_recon_b = 1 * 28, 2 * 28
-    ya, yb = y * 28, (y + 1) * 28
-    im = np.reshape(x[i], (28, 28))
-    im_recon = np.reshape(x_recon[i], (28, 28))
-    img_out[x_a:x_b, ya:yb] = im
-    img_out[x_recon_a:x_recon_b, ya:yb] = im_recon
-    i += 1
-m = plt.matshow(img_out, cmap='gray')
-plt.xticks(np.array([]))
-plt.yticks(np.array([]))
-plt.show()

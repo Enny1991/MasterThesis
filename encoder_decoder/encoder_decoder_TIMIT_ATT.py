@@ -244,12 +244,11 @@ output_decoder_train = lasagne.layers.get_output(l_out, inputs={l_in: x_sym, l_m
 
 
 #cost function
-out_mask = (T.reshape(T.extra_ops.repeat(ymask_sym.flatten(), NUM_OUTPUTS, axis=0),((MAX_DIGITS+1)*BATCH_SIZE,NUM_OUTPUTS)))
+# out_mask = (T.reshape(T.extra_ops.repeat(ymask_sym.flatten(), NUM_OUTPUTS, axis=0),((MAX_DIGITS+1)*BATCH_SIZE,NUM_OUTPUTS)))
 total_cost = T.nnet.categorical_crossentropy(
     T.reshape(output_decoder_train, (-1, NUM_OUTPUTS)), y_sym.flatten())
 
-OO =  lasagne.layers.get_output(l_out, inputs={l_in: x_sym, l_mask_enc: xmask_sym}).eval(
-     {x_sym: inputs, xmask_sym: input_masks})
+
 #
 # m = total_cost.eval({output_decoder_train: OO, y_sym: targets})
 # f = T.mean(m * ymask_sym.flatten())

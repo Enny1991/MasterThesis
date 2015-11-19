@@ -229,6 +229,7 @@ val_interval = 5000
 samples_to_process = 1.5e5
 samples_processed = 0
 val_samples = []
+val_processed = []
 costs, accs = [], []
 plt.figure()
 try:
