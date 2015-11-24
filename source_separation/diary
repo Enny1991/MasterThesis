@@ -98,9 +98,6 @@ around... 110224 sample from which I wanna learn...
 XXXXXXX forget it that is just too fucked up, it is less apinfull make up a matlab  function that creates the samples
 for me on the fly
 
--> I set up a file "ss_2_matlab.py" to test this theory of having more mixed samples among which I train, at every epoch
+I set up a file "ss_2_matlab.py" to test this theory of having more mixed samples among which I train, at every epoch
 15 MINIBATCHES of 12 samples each are created and the netowrk is trained, for now it looks kinda fucked up since the 
-error should be balanced, ehile the error is higher in the 'noise' one, does matter. Keep pushing.
-
--> I' ll now create a file "ss_VAE_single_latent.py" where the decoder is only initialized with teh last time step of the encoder, it is very much
-faster I guess
+error should be balanced, ehile the error is higher in the 'noise' one, does matter. Keep 

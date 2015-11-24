@@ -216,7 +216,7 @@ print "LSTM Decoder Layer: {}".format(lasagne.layers.get_output(l_dec, inputs={l
 # we want batch_size * time_steps, num_units
 # so the new shape will be 2 (first, second)
 # the second dimension should be the same as the third dimension of the original
-# the first being -1 means that the dimension is infer to kjeep trhe total number unchanged
+# the first being -1 means that the dimension is infer to keep the total number unchanged
 l_reshape = lasagne.layers.ReshapeLayer(l_dec, (-1, [2]))
 
 print "Reshaped Layer: {}".format(lasagne.layers.get_output(l_reshape, inputs={l_in: x_sym, l_in_mask: x_mask_sym}).eval({x_sym: v_train_x, x_mask_sym: v_train_x_mask}).shape)

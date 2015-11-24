@@ -12,33 +12,20 @@ from lasagne.updates import adam
 from matplotlib import pyplot as plt
 from lasagne.regularization import l2
 
-####
-# added
-import lasagne
-import theano
-import theano.tensor as T
-import numpy as np
-import time as tm
-from lasagne.nonlinearities import rectify,identity, tanh
-from scipy.io import loadmat, savemat
-from lasagne.layers import InputLayer, DenseLayer, DropoutLayer, Layer
-from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
-from lasagne import init
-from lasagne.updates import adam
-from matplotlib import pyplot as plt
-from lasagne.regularization import l2
 
-
-def createMLP(layers,s):
+def createMLP(layers, s):
     l_in = lasagne.layers.InputLayer(shape=(None, s))
     prev_layer = l_in
     Ws = []
     for layer in layers:
-        enc = lasagne.layers.DenseLayer(prev_layer, num_units=layer, nonlinearity=rectify, W=init.Uniform(0.1))
+        enc = lasagne.layers.DenseLayer(prev_layer, num_units=layer, nonlinearity=rectify, W=init.Uniform(0.01))
         Ws += [enc.W]
         drop = lasagne.layers.DropoutLayer(enc, p=0.5)
         prev_layer = drop
     idx = 1
+    # creating mask
+    mask = lasagne.layers.InputLayer(shape=(None, layers[-1]))
+    prev_layer = lasagne.layers.ElemwiseMergeLayer([prev_layer, mask], merge_function=T.mul)
     for layer in layers[-2::-1]:
         print layer
         dec = lasagne.layers.DenseLayer(prev_layer, num_units=layer, nonlinearity=rectify, W=Ws[-idx].T)
@@ -48,13 +35,14 @@ def createMLP(layers,s):
     model = lasagne.layers.DenseLayer(prev_layer, num_units=s, nonlinearity=identity, W=Ws[0].T)
 
     x_sym = T.dmatrix()
+    mask_sym = T.dmatrix()
     all_params = lasagne.layers.get_all_params(model)
-    output = lasagne.layers.get_output(model, inputs={l_in: x_sym})
+    output = lasagne.layers.get_output(model, inputs={l_in: x_sym, mask: mask_sym})
     loss_eval = lasagne.objectives.squared_error(output, x_sym).sum()
     loss_eval /= (2.*batch_size)
     updates = lasagne.updates.adam(loss_eval, all_params)
 
-    return l_in, model, theano.function([x_sym], loss_eval, updates=updates)
+    return l_in, mask, model, theano.function([x_sym, mask_sym], loss_eval, updates=updates)
 
 
 
@@ -74,12 +62,8 @@ rec_cor_2 = np.zeros_like(cor)
 time, freq, rates = cor.shape
 d = freq * rates / 2
 c_mat = np.zeros(shape=(freq+1, d))
-mask = np.zeros((freq+1, 2))
-mask2 = np.zeros((freq+1, 2))
-mask[:, 0] = 1.
-mask[:, 1] = 1.
 all_params = None
-a2 = 200
+a2 = 512
 # fake data for debugginf
 x_sym = T.dmatrix()
 latent_sym = T.dmatrix()
@@ -90,7 +74,7 @@ x_fake_2 = np.ones((32, d))
 
 n_epochs = 200
 batch_size = 500
-layers = [200]
+layers = [200, 2]
 Ws = []
 
 
@@ -102,7 +86,12 @@ for layer in layers:
     Ws += [enc.W]
     drop = lasagne.layers.DropoutLayer(enc, p=0.5)
     prev_layer = drop
+
 idx = 1
+
+# creating mask
+mask = lasagne.layers.InputLayer(shape=(None, layers[-1]))
+prev_layer = lasagne.layers.ElemwiseMergeLayer([prev_layer, mask], merge_function=T.mul)
 for layer in layers[-2::-1]:
     print layer
     dec = lasagne.layers.DenseLayer(prev_layer, num_units=layer, nonlinearity=rectify, W=Ws[-idx].T)
@@ -113,19 +102,25 @@ model = lasagne.layers.DenseLayer(prev_layer, num_units=a2, nonlinearity=identit
 
 
 x_sym = T.dmatrix()
+mask_sym = T.dmatrix()
 all_params = lasagne.layers.get_all_params(model)
-output = lasagne.layers.get_output(model, inputs={l_in: x_sym})
+output = lasagne.layers.get_output(model, inputs={l_in: x_sym, mask: mask_sym})
 loss_eval = lasagne.objectives.squared_error(output, x_sym).sum()
 loss_eval /= (2.*batch_size)
 
 
 updates = lasagne.updates.adam(loss_eval, all_params)
 
-train_model = theano.function([x_sym], loss_eval, updates=updates)
+train_model = theano.function([x_sym, mask_sym], loss_eval, updates=updates)
 
 x_sym = T.dmatrix()
 
-l_in, model, train_model = createMLP(layers, a2)
+l_in, mask_layer, model, train_model = createMLP(layers, a2)
+
+
+mask = np.zeros(((freq+1)*rates/2, 2))
+mask[:, 0] = 1
+mask_training = np.ones(((freq+1)*rates/2, 2))
 
 for t in range(time):
     x = cor[t, :, :]
@@ -139,15 +134,16 @@ for t in range(time):
         c_mat[:-1, slice(rate * freq, (rate + 1) * freq)] = np.real((d1 + d2) / 2)
     x_prime = x_prime.transpose()
     c_mat[-1, :] = x_prime
-    c_mat_lim = c_mat[:, :a2]
+    c_mat_lim = c_mat.reshape((freq+1)*rates/2, freq)
+    print c_mat_lim.shape
     for epoch in range(n_epochs):
         # c_mat_sc = c_mat[np.random.randint(0, freq+1, size=(freq + 1))]
         # c_mat_sc += rng.rand(c_mat_sc.shape[0], c_mat_sc.shape[1]) / (np.max(c_mat_sc) * 10)
         # for i in range(8):
-        eval_train = train_model(c_mat_lim)
+        eval_train = train_model(c_mat_lim, mask_training)
         print "Layer %i %.10f (time=%i)" % (layer, eval_train, epoch)
 
-    c_recon = lasagne.layers.get_output(model,{l_in: x_sym}, deterministic=True).eval({x_sym: c_mat_lim})
+    c_recon = lasagne.layers.get_output(model, {l_in: x_sym, mask_layer: mask_sym}, deterministic=True).eval({x_sym: c_mat_lim, mask_sym: mask})
 
     fig = plt.figure()
     plt.subplot(1, 2, 1)

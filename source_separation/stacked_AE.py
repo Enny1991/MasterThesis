@@ -112,3 +112,5 @@ m = plt.matshow(img_out, cmap='gray')
 plt.xticks(np.array([]))
 plt.yticks(np.array([]))
 plt.show()
+
+
