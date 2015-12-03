@@ -27,11 +27,11 @@ mask_test = np.array(mask_test)
 
 max_len = test_x.shape[1]
 n_features = test_x.shape[2]
-n_batch = 12
+n_batch = 30
 
-NUM_UNITS_ENC = 50
-NUM_UNITS_DEC = 50
-NUM_UNITS_BOT = 15
+NUM_UNITS_ENC = 100
+NUM_UNITS_DEC = 100
+NUM_UNITS_BOT = 50
 
 x_sym = T.dtensor3()
 mask_x_sym = T.dmatrix()
