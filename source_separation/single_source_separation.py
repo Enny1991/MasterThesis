@@ -12,7 +12,7 @@ import matlab.engine
 eng = matlab.engine.start_matlab()
 
 
-def pad_sequences(sequences, max_len, dtype='int32', padding='post', truncating='post', transpose=True, value=0.):
+def pad_sequences(sequences, max_len, dtype='float32', padding='post', truncating='post', transpose=True, value=0.):
     # (nb_samples, max_sample_length (samples shorter than this are padded with zeros at the end), input_dim)
     nb_samples = len(sequences)
     x = (np.ones((nb_samples, max_len, sequences[0].shape[0])) * value).astype(dtype)

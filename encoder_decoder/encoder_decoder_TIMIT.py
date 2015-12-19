@@ -93,7 +93,7 @@ def get_batch(batch_size=10, max_digits=2, min_digits=1):
 
     for i in range(batch_size):
         t = tuple()
-        for j in range(np.random.randint(min_digits, max_digits+1)):
+        for j in range(np.random.randintfs(min_digits, max_digits+1)):
             t = t + (np.random.randint(0, 10),)
         rand_in.append(t)
 

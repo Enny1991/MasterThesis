@@ -2,7 +2,7 @@ from __future__ import division
 import lasagne
 import numpy as np
 import time
-from lasagne.layers import GRULayer, LSTMLayer, DenseLayer, InputLayer, ReshapeLayer, SliceLayer, Layer
+from lasagne.layers import GRULayer, LSTMLayer, DenseLayer, InputLayer, ReshapeLayer, SliceLayer, Layer, DropoutLayer, ConcatLayer
 import theano
 from lasagne import init
 import theano.tensor as T
@@ -20,7 +20,7 @@ def make_shared(x, borrow=True):
         return shared_x
 
 
-def pad_sequences(sequences, max_len, dtype='int32', padding='post', truncating='post', transpose=True, value=0.):
+def pad_sequences(sequences, max_len, dtype='float32', padding='post', truncating='post', transpose=True, value=0.):
     # (nb_samples, max_sample_length (samples shorter than this are padded with zeros at the end), input_dim)
     nb_samples = len(sequences)
     x = (np.ones((nb_samples, max_len, sequences[0].shape[1])) * value).astype(dtype)
@@ -46,8 +46,8 @@ data = data[0]
 print len(data)
 print data[0].shape
 
-# find max
 
+#
 
 n_features = data[0].shape[1]
 n_features_model = 30
@@ -72,8 +72,21 @@ for i, d in enumerate(data):
 slices = [slice(0, 30), slice(20, 50), slice(40, 70),  slice(60, 90), slice(80, 110), slice(100, 128)]
 overlap = [slice(20, 30), slice(40, 50), slice(60, 70), slice(80, 90), slice(100, 110)]
 len_slices = [30, 30, 30, 30, 30, 28]
+
+# norm
+# for i, sample in enumerate(data_x):
+#     a = np.max(sample)
+#     data_x[i] = sample / a
+#     print a
+# for i, sample in enumerate(data_x):
+#     a = np.max(sample)
+#     print a
+
+#
+
 # data_x is in the shape (n_samples, max_len, features)
 # TODO normalize the data before
+
 DATA_X = np.zeros((len(data_x), len(slices), max_len, n_features_model))
 DATA_T = np.zeros_like(DATA_X)
 for i, sample in enumerate(data_x):
@@ -86,6 +99,7 @@ print 'DATA_X shape: {}'.format(DATA_X.shape)
 # the mask is the same for all the 6 slices
 # mask_out has already been calculated and its the same for all slices but now it is 30 features
 # separation
+
 
 
 train_x = DATA_X[:train_samples]
@@ -162,13 +176,18 @@ class PRAE:
         # I could directly create the model here since it is fixed
         self.l_in = InputLayer(shape=(None, self.max_len, self.n_features))
         self.mask_input = InputLayer(shape=(None, self.max_len))
-        first_hidden = LSTMLayer(self.l_in, mask_input=self.mask_input, num_units=hidden[0])
-        second_hidden = LSTMLayer(first_hidden, num_units=hidden[1])
-        l_shp = ReshapeLayer(second_hidden, (-1, hidden[1]))
-        l_dense = DenseLayer(l_shp, num_units=self.n_features, nonlinearity=rectify)
+        first_hidden = GRULayer(self.l_in, mask_input=self.mask_input, num_units=hidden[0])
+        # l_shp = ReshapeLayer(first_hidden, (-1, hidden[0]))
+        # l_dense = DenseLayer(l_shp, num_units=self.hidden[0], nonlinearity=rectify)
+        # l_drop = DropoutLayer(l_dense, p=0.5)
+        # l_shp = ReshapeLayer(l_drop, (-1, self.max_len, self.hidden[0]))
+        self.model = GRULayer(first_hidden, num_units=hidden[1])
+        # self.model = ConcatLayer([first_hidden, second_hidden], axis=2)
+        # l_shp = ReshapeLayer(second_hidden, (-1, hidden[1]))
+        # l_dense = DenseLayer(l_shp, num_units=self.n_features, nonlinearity=rectify)
         # To reshape back to our original shape, we can use the symbolic shape
         # variables we retrieved above.
-        self.model = ReshapeLayer(l_dense, (-1, self.max_len, self.n_features))
+        #self.model = ReshapeLayer(l_dense, (-1, self.max_len, self.n_features))
         # if now I put a dense layer this will collect all the output temporally which is what I want, I'll have to fix
         # the dimensions probably later
         # For every gaussian in the sum I need 3 values plus a value for the total scale
@@ -176,6 +195,9 @@ class PRAE:
 
     def get_output_shape_for(self):
         return self.model.get_output_shape_for(self.num_batch, self.max_len, self.hidden[1])
+
+    def get_output_y(self, x):
+        return T.nnet.relu(T.dot(x, self.W) + self.b)
 
 
     def build_model(self, train_x, train_mask_x, train_mask_out, train_target,
@@ -200,25 +222,27 @@ class PRAE:
         # TODO think about this if it is true
 
         out = lasagne.layers.get_output(self.model, inputs={self.l_in: sym_x, self.mask_input: sym_mask_x})
-        loss = T.mean(lasagne.objectives.squared_error(out, sym_target)) / self.num_batch
+        out_out = self.get_output_y(out)
+        loss = T.mean(lasagne.objectives.squared_error(out_out, sym_target)) / self.num_batch
 
         out_test = lasagne.layers.get_output(self.model, inputs={self.l_in: sym_x, self.mask_input: sym_mask_x})
-        loss_test = T.mean(lasagne.objectives.squared_error(out_test, sym_target)) / self.num_batch_test
+        out_out_test = self.get_output_y(out_test)
+        loss_test = T.mean(lasagne.objectives.squared_error(out_out_test, sym_target)) / self.num_batch_test
 
-        all_params = lasagne.layers.get_all_params(self.model)
+        all_params = [self.W] + [self.b] +lasagne.layers.get_all_params(self.model)
         all_grads_target = [T.clip(g, -3, 3) for g in T.grad(loss, all_params)]
         all_grads_target = lasagne.updates.total_norm_constraint(all_grads_target, 3)
         updates_target = adam(all_grads_target, all_params)
 
         train_model = theano.function([self.index],
-                                      [loss, out],
+                                      [loss, out_out],
                                       givens={sym_x: self.train_x[self.b_slice],
                                               sym_mask_x: self.train_mask_x[self.b_slice],
                                               sym_target: self.train_target[self.b_slice],
                                               },
                                       updates=updates_target)
         test_model = theano.function([self.num_batch_test],
-                                     [loss_test, out],
+                                     [loss_test, out_out_test],
                                      givens={sym_x: self.test_x,
                                              sym_mask_x: self.test_mask_x,
                                              sym_target: self.test_target,
@@ -228,13 +252,13 @@ class PRAE:
 
 
 ###### Run the model ######
-num_batches = 10
+num_batches = 5
 n_batch = int((train_samples / num_batches))
 n_epochs = 10
 n_batch_test = total_samples - train_samples
 
 
-MODEL = [PRAE(n_batch, max_len, n_features_model) for _ in range(6)]
+MODEL = [PRAE(n_batch, max_len, n_features_model, hidden=[50, 50]) for _ in range(6)]
 
 TRAINER = []
 TESTER = []
@@ -255,11 +279,11 @@ ex = np.zeros((6, total_samples - train_samples, max_len, n_features_model))
 
 for e in range(n_epochs):
     for j, trainer in enumerate(TRAINER):
-        for k in range(1):
+        for k in range(num_batches):
             loss, theta = trainer(k)
             print'epoch=%i/%i' % ((e + 1), n_epochs) + '-'*1,
             print'model=%i/6' % (j + 1) + '-'*1,
-            print'batch=%i/%i' % (k, num_batches) + '-'*3
+            print'batch=%i/%i' % (k+1, num_batches) + '-'*3
             print'loss = %.10f' % loss
             print'-'*25
 
@@ -268,7 +292,7 @@ for e in range(n_epochs):
         loss, theta = tester(total_samples - train_samples)
         # savemat('log.mat', {'theta': theta})
         ex[j, :, :, :] = theta
-        print'loss model %i = %.10f' % (j, loss)
+        print'loss model %i = %.10f' % (j+1, loss)
     print '-'*25
 
     # print some shit to see the output
@@ -304,7 +328,7 @@ for e in range(n_epochs):
     plt.colorbar()
     plt.show()
 
-savemat('out_predictive_mal.mat', {'ex_mal': ex})
+savemat('out_predictive_rec.mat', {'merged': merged})
 
 
 

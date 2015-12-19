@@ -1,0 +1,62 @@
+Let's start to validate some example on timit by including the whole pipeline.
+Including saving everything an calculating SNR, SIR, SDR, SAR.
+
+The architecture of the RNN is the following (except):
+
+                         FWD Pool + BWD Pool
+                                  |
+                  Female Pool <-------> Male Pool
+                        |                  |
+                      Dense              Dense
+
+COUPLES
+    name           M        F
+timit_classic_1:  PAR0     ALK0
+timit_classic_2:  BML0     CAG0
+timit_classic_3:  WCH0     CJS0
+timit_classic_4:  CPM0     CRZ0
+timit_classic_5:  VLO0     DAW0
+timit_classic_6:  DEF0     VMH0
+timit_classic_7:  DLH0     VFB0
+timit_classic_8:  DTB0     HLM0
+timit_classic_9:  GAW0     PJF0
+timit_classic_10: WRP0     JDM2
+
+
+
+Validation of 10 different couples for the following models:
+    * SPECTROGRAMS: (where I can I will also check when resampling 8k vs 16k)
+        # DATASET READY
+        # multi script ready
+        THIS IS ALWAYS MASK NOT DIRECT REGRESSION
+        - classic with MSE
+            - norm
+            - not norm
+        - one minus
+            - norm
+            - not norm
+        - force SIR
+            - norm
+            - not norm
+
+    * PCA24: (also in this case I will check for 8k vs 16k)
+        DIRECT REGRESSION
+        - classic with MSE
+            - norm
+            - not norm
+        - one minus
+            - norm
+            - not norm
+        - force SIR
+            - norm
+            - not norm
+        MASK REGRESSION
+        - classic with MSE
+            - norm
+            - not norm
+        - one minus
+            - norm
+            - not norm
+        - force SIR
+            - norm
+            - not norm

@@ -20,7 +20,7 @@ def make_shared(x, borrow=True):
         return shared_x
 
 
-def pad_sequences(sequences, max_len, dtype='int32', padding='post', truncating='post', transpose=True, value=0.):
+def pad_sequences(sequences, max_len, dtype='float32', padding='post', truncating='post', transpose=True, value=0.):
     # (nb_samples, max_sample_length (samples shorter than this are padded with zeros at the end), input_dim)
     nb_samples = len(sequences)
     x = (np.ones((nb_samples, max_len, sequences[0].shape[1])) * value).astype(dtype)
@@ -131,24 +131,24 @@ class PRAE:
         self.rng = RandomStreams(rng.randint(2 ** 30))
 
         # params
-        # initial_W = np.asarray(
-        #     rng.uniform(
-        #             low=1e-5,
-        #             high=1,
-        #             size=(self.hidden[1], self.n_features)
-        #     ),
-        #     dtype=theano.config.floatX
-        # )
-        #
-        # self.W_y_theta = theano.shared(value=initial_W, name='W_y_theta', borrow=True)
+        initial_W = np.asarray(
+            rng.uniform(
+                    low=1e-5,
+                    high=1,
+                    size=(self.hidden[1], self.n_features)
+            ),
+            dtype=theano.config.floatX
+        )
+
+        self.W_y_theta = theano.shared(value=initial_W, name='W_y_theta', borrow=True)
         # # self.W_y_kappa = theano.shared(value=initial_W, name='W_y_kappa', borrow=True)
-        # self.b_y_theta = theano.shared(
-        #         value=np.zeros(
-        #             self.n_features,
-        #             dtype=theano.config.floatX
-        #         ),
-        #         borrow=True
-        #     )
+        self.b_y_theta = theano.shared(
+                value=np.zeros(
+                    self.n_features,
+                    dtype=theano.config.floatX
+                ),
+                borrow=True
+            )
         # self.b_y_kappa = theano.shared(
         #         value=np.zeros(
         #             self.n_features,
@@ -162,12 +162,12 @@ class PRAE:
         # I could directly create the model here since it is fixed
         self.l_in = InputLayer(shape=(self.num_batch, self.max_len, self.n_features))
         self.mask_input = InputLayer(shape=(self.num_batch, self.max_len))
-        first_hidden = LSTMLayer(self.l_in, mask_input=self.mask_input, num_units=hidden[0])
-        second_hidden = LSTMLayer(first_hidden, num_units=hidden[1])
+        first_hidden = GRULayer(self.l_in, mask_input=self.mask_input, num_units=hidden[0])
+        self.model =GRULayer(first_hidden, num_units=hidden[1])
         # need some reshape voodoo
-        l_shp = ReshapeLayer(second_hidden, (-1, hidden[1]))
+        # l_shp = ReshapeLayer(second_hidden, (-1, hidden[1]))
         # after the reshape I have batch*max_len X features
-        self.model = DenseLayer(l_shp, num_units=self.n_features, nonlinearity=rectify)
+        # self.model = DenseLayer(l_shp, num_units=self.n_features, nonlinearity=rectify)
         # if now I put a dense layer this will collect all the output temporally which is what I want, I'll have to fix
         # the dimensions probably later
         # For every gaussian in the sum I need 3 values plus a value for the total scale
@@ -186,10 +186,9 @@ class PRAE:
 
     def get_log_x(self, x, theta_out):
         # DIM = (batch, time, hidden)
-        # (kappa-1)log(x) + x/theta -log(gamma(kappa)) -(kappa)log(theta)
         # everything is elementwise
         log_x = T.log(theta_out + 1e-8) - theta_out * x
-        log_x = log_x.sum(axis=2, dtype=theano.config.floatX)
+        log_x = log_x.sum(axis=2, dtype=theano.config.floatX)  # sum over x cause I assume they are independent
         return log_x
 
     def build_model(self, train_x, train_mask_x, train_mask_out, train_target,
@@ -212,18 +211,17 @@ class PRAE:
         # sym_mask_out = T.dtensor3() should not be useful since output is still zero
         # TODO think about this if it is true
 
-        theta = lasagne.layers.get_output(self.model, inputs={self.l_in: sym_x, self.mask_input: sym_mask_x})
-        theta = T.reshape(theta, (self.num_batch, self.max_len, self.n_features))
+        output = lasagne.layers.get_output(self.model, inputs={self.l_in: sym_x, self.mask_input: sym_mask_x})
+        theta = self.get_output_y(output)
         log_px = self.get_log_x(sym_target, theta)
-        log_px_sum_time = log_px.sum(axis=1, dtype=theano.config.floatX) # sum over time
+        log_px_sum_time = log_px.sum(axis=1, dtype=theano.config.floatX) # sum over tx
         loss = - T.sum(log_px_sum_time) / self.num_batch # average over batch
         ##
-        theta_test = T.reshape(theta, (self.num_batch_test, self.max_len, self.n_features))
-        log_px_test = self.get_log_x(sym_target, theta_test)
+        log_px_test = self.get_log_x(sym_target, theta)
         log_px_sum_time_test = log_px_test.sum(axis=1, dtype=theano.config.floatX) # sum over time
-        loss_test = - T.sum(log_px_sum_time_test) / self.num_batch_test # average over batch
+        loss_test = - T.sum(log_px_sum_time_test) / self.num_batch_test  # average over batch
         # loss = T.mean(lasagne.objectives.squared_error(mu, sym_target))
-        all_params = lasagne.layers.get_all_params(self.model)
+        all_params = [self.W_y_theta] + [self.b_y_theta] + lasagne.layers.get_all_params(self.model)
         all_grads_target = [T.clip(g, -3, 3) for g in T.grad(loss, all_params)]
         all_grads_target = lasagne.updates.total_norm_constraint(all_grads_target, 3)
         updates_target = adam(all_grads_target, all_params)
@@ -235,7 +233,7 @@ class PRAE:
                                               sym_target: self.train_target[self.b_slice]},
                                       updates=updates_target)
         test_model = theano.function([self.num_batch_test],
-                                     [loss_test, theta_test],
+                                     [loss_test, theta],
                                      givens={sym_x: self.test_x,
                                              sym_mask_x: self.test_mask_x,
                                              sym_target: self.test_target})
