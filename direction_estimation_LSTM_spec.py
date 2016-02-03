@@ -9,7 +9,7 @@ from lasagne.nonlinearities import leaky_rectify, softmax
 import cPickle as pickle
 import os
 import time
-
+from scipy.io import savemat
 np.random.seed(42)
 PARAM_EXTENSION = 'params'
 
@@ -145,7 +145,7 @@ def main(num_epochs=epochs):
     updates = lasagne.updates.adagrad(cost, all_params, eta)
     print("Compiling functions ...")
     train = theano.function([l_in.input_var, target_values, l_mask.input_var],
-                            [cost], updates=updates, allow_input_downcast=True)
+                            [cost, acc], updates=updates, allow_input_downcast=True)
     compute_cost = theano.function(
         [l_in.input_var, target_values, l_mask.input_var], [cost, acc, network_output], allow_input_downcast=True)
 
@@ -168,6 +168,10 @@ def main(num_epochs=epochs):
     print('Training')
     reprint = np.floor(epoch_size/10)
     cont = 0
+    cost_val =[]
+    cost = []
+    acc = []
+    acc_val = []
     try:
         for epoch in range(num_epochs):
             print("Epoch #{} [__________]".format(epoch), end="\r")
@@ -176,12 +180,17 @@ def main(num_epochs=epochs):
                     cont += 1
                     print(f(cont).format(epoch), end="\r")
                 # x, y = gen_input()
-                train(x_train[e*n_batch:(e+1)*n_batch], y_train[e*n_batch:(e+1)*n_batch], mask_train[e*n_batch:(e+1)*n_batch])
-            cost_val, acc_val, _ = compute_cost(x_val, y_val, mask_val)
-            print("Epoch #{} [=========>] cost = {}, acc = {}".format(epoch, cost_val, acc_val))
+                cost_tmp, acc_tmp = train(x_train[e*n_batch:(e+1)*n_batch], y_train[e*n_batch:(e+1)*n_batch], mask_train[e*n_batch:(e+1)*n_batch])
+            cost_val_tmp, acc_val_tmp, _ = compute_cost(x_val, y_val, mask_val)
+            cost += [cost_tmp]
+            cost_val += [cost_val_tmp]
+            acc_val += [acc_val_tmp]
+            acc += [acc_tmp]
+            print("Epoch #{} [=========>] cost = {}, acc = {}".format(epoch, cost_val_tmp, acc_val_tmp))
             cont = 0
         cost_test, acc_test, output_test = compute_cost(x_test, y_test, mask_test)
         date = time.strftime("%H:%M_%d:%m:%Y")
+        savemat('outputs_spec.mat',{'out':output_test})
         write_model_data(l_out, 'model_{}'.format(date))
         list_hyp = (
             h,

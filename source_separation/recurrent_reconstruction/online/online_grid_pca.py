@@ -17,6 +17,11 @@ import pyaudio
 import wave
 from matplotlib import pyplot as plt
 
+
+def project(high_dim, v):
+    v50 = v[:, :24]
+    return np.dot(high_dim, v50).T
+
 def reproject(low_dim, v):
     filler = np.zeros((low_dim.shape[0], 233))
     tomult = np.concatenate((low_dim, filler), axis=1)
@@ -158,6 +163,8 @@ if __name__ == "__main__":
     # - Encoder F
     # - Decoder M
     # - Decoder F
+
+    # invert spec to raw
     init_0 = np.zeros((1, max_len, NUM_UNITS_DEC))
     in_fwd = init_0
     in_bwd = init_0

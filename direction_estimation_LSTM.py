@@ -14,8 +14,8 @@ np.random.seed(42)
 PARAM_EXTENSION = 'params'
 
 # Rearrange the input from Matlab matricies
-data_x = loadmat('direction_dataset_noZERO.mat')['X_train_final_1']
-data_y = loadmat('direction_dataset_noZERO.mat')['Y_train_1']
+data_x = loadmat('data/direction_dataset_noZERO.mat')['X_train_final_1']
+data_y = loadmat('data/direction_dataset_noZERO.mat')['Y_train_1']
 
 n_dir = 9
 
