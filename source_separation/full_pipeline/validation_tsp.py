@@ -71,7 +71,7 @@ if __name__ == "__main__":
 
     #########
     #######
-    n_features = train_m.shape[1]  # this time they are 512
+    x =   # this time they are 512
     if tpe is 0 or 2:
         nonlin = sigmoid
     if tpe is 1:
