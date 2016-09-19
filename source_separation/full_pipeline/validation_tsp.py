@@ -62,16 +62,16 @@ if __name__ == "__main__":
 
     fs = 16
 
-    train_m = loadmat('data/TSP_{}_SCR.mat'.format(index_timit))['PWRa']
-    train_f = loadmat('data/TSP_{}_SCR.mat'.format(index_timit))['PWRb']
-    train_x = loadmat('data/TSP_{}_SCR.mat'.format(index_timit))['PWR']
-    test_m = loadmat('data/TSP_{}_SCR.mat'.format(index_timit))['PWRatest']
-    test_f = loadmat('data/TSP_{}_SCR.mat'.format(index_timit))['PWRbtest']
-    test_x = loadmat('data/TSP_{}_SCR.mat'.format(index_timit))['PWRtest']
+    train_m = loadmat('/Data/Dropbox/DATASETS/TSP/TSP_{}_SCR.mat'.format(index_timit))['PWRa']
+    train_f = loadmat('/Data/Dropbox/DATASETS/TSP/TSP_{}_SCR.mat'.format(index_timit))['PWRb']
+    train_x = loadmat('/Data/Dropbox/DATASETS/TSP/TSP_{}_SCR.mat'.format(index_timit))['PWR']
+    test_m = loadmat('/Data/Dropbox/DATASETS/TSP/TSP_{}_SCR.mat'.format(index_timit))['PWRatest']
+    test_f = loadmat('/Data/Dropbox/DATASETS/TSP/TSP_{}_SCR.mat'.format(index_timit))['PWRbtest']
+    test_x = loadmat('/Data/Dropbox/DATASETS/TSP/TSP_{}_SCR.mat'.format(index_timit))['PWRtest']
 
     #########
     #######
-    x =   # this time they are 512
+    n_features = train_m.shape[1]  # this time they are 512
     if tpe is 0 or 2:
         nonlin = sigmoid
     if tpe is 1:
